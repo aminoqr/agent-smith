@@ -1,6 +1,11 @@
 
 agent smith subject.pdf
 
+# Personal interview prep and AI-usage log: private, not for the public repo.
+# A short, deliberate AI-usage summary goes in the README instead (M8.5 / M12).
+INTERVIEW_NOTES.md
+AI_USAGE_LOG.md
+
 # Python / uv
 .venv/
 __pycache__/
