@@ -15,8 +15,8 @@ Subject references: "V.2(3)" = item 3 of section V.2 in `agent smith subject.pdf
 | # | Milestone | Owner | Est. | Status |
 |---|-----------|-------|------|--------|
 | **Phase 1: Interview-ready MBPP agent** |||||
-| 1 | Repo, uv, Python 3.10, Pydantic models, JSON config loading | Shared | 3-4 h | [ ] |
-| 2 | Sandbox policy layer (in-process): exec, restricted builtins, import allowlist, path guard, AST checks | A | 5-7 h | [ ] |
+| 1 | Repo, uv, Python 3.10, Pydantic models, JSON config loading | Shared | 3-4 h | [x] done 2026-11-04, tag `m1-done` |
+| 2 | Sandbox policy layer (in-process): exec, restricted builtins, import allowlist, path guard, AST checks | A | 5-7 h | [x] done 2026-11-04, tag `m2-done` |
 | 3 | Sandbox isolation: worker process, IPC, timeout (soft + hard), partial output | A | 6-8 h | [ ] |
 | 3.5 | Sandbox hardening: memory limit, network block, audit hook, KeyboardInterrupt/SystemExit, security suite | A | 5-7 h | [ ] |
 | 4 | Sandbox REPL CLI (`uv run sandbox`) and `final_answer` | A | 3-4 h | [ ] |
