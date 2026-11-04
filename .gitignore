@@ -1,0 +1,16 @@
+
+agent smith subject.pdf
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets: only .env.example (names, no values) is ever committed
+.env
+
+# Generated outputs
+evaluations/
+*.log
