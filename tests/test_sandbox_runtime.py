@@ -59,3 +59,17 @@ def test_syntax_error_is_reported(namespace):
 def test_system_exit_is_not_swallowed(namespace):
     with pytest.raises(SystemExit):
         execute("raise SystemExit(3)", namespace)
+
+
+def test_timeout_interrupts_a_loop(namespace):
+    execute("x = 5", namespace)
+    result = execute("print('start')\nwhile True: pass", namespace, timeout_seconds=1)
+    assert result.stdout == "start\n"
+    assert "Timeout" in result.error
+    assert execute("x", namespace).value == "5"
+    
+
+def test_output_is_streamed_while_running(namespace):
+    seen = []
+    execute("print('a')\nprint('b')", namespace, on_output=seen.append)
+    assert "".join(seen) == "a\nb\n"
