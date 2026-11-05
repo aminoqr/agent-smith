@@ -19,3 +19,7 @@ __pycache__/
 # Generated outputs
 evaluations/
 *.log
+
+# Private working docs: local only
+CLAUDE.md
+PLAN.md
