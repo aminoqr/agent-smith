@@ -53,7 +53,7 @@ def test_normal_imports_still_work(sandbox):
 
 
 def test_environment_variables_are_not_visible(monkeypatch):
-    monkeypatch.setenv("FAKE_API_KEY", "sk-this-is-a-secret")
+    monkeypatch.setenv("FAKE_API_KEY", "not-a-real-key-env-0001")
     with Sandbox(SandboxConfig()) as running:
         leaked = running.execute("import random\nrandom._os.environ.get('FAKE_API_KEY')")
         count = running.execute("import random\nlen(random._os.environ)")
