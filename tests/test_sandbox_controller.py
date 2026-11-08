@@ -1,6 +1,10 @@
 """Tests for the sandbox controller and its worker process."""
-import pytest
+import os
+import signal
+import threading
 import time
+
+import pytest
 
 from agent_smith.models import SandboxConfig
 from agent_smith.sandbox.controller import Sandbox
@@ -96,3 +100,31 @@ def test_long_output_is_truncated_with_a_note(sandbox):
 
 def test_short_output_is_not_touched(sandbox):
     assert sandbox.execute("print('hello')").stdout == "hello\n"
+
+
+def test_memory_bomb_is_stopped(sandbox):
+    result = sandbox.execute("x = [0] * 10**10")
+    assert "memory limit" in result.error
+    assert sandbox.execute("1 + 1").value == "2"
+
+
+def test_system_exit_in_code_reaches_the_caller(sandbox):
+    with pytest.raises(SystemExit) as info:
+        sandbox.execute("raise SystemExit(3)")
+    assert info.value.code == 3
+    assert sandbox.execute("1 + 1").value == "2"
+
+
+def test_keyboard_interrupt_in_code_reaches_the_caller(sandbox):
+    with pytest.raises(KeyboardInterrupt):
+        sandbox.execute("raise KeyboardInterrupt")
+    assert sandbox.execute("1 + 1").value == "2"
+
+
+def test_ctrl_c_while_waiting_kills_the_worker():
+    with Sandbox(SandboxConfig(max_execution_time_seconds=30)) as running:
+        process = running._process
+        threading.Timer(0.5, os.kill, args=(os.getpid(), signal.SIGINT)).start()
+        with pytest.raises(KeyboardInterrupt):
+            running.execute("while True: pass")
+        assert not process.is_alive()

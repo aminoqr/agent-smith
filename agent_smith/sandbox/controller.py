@@ -30,6 +30,13 @@ def _join_output(chunks: list[str]) -> str:
     )
 
 
+def _control_exception(message: dict) -> BaseException:
+    """Rebuild the SystemExit or KeyboardInterrupt the model's code raised."""
+    if message["exception"] == "KeyboardInterrupt":
+        return KeyboardInterrupt()
+    return SystemExit(message["code"])
+
+
 class Sandbox:
     """Runs code in a separate worker process that keeps its variables."""
 
@@ -55,6 +62,7 @@ class Sandbox:
         limit = self.config.max_execution_time_seconds
         deadline = time.monotonic() + limit + HARD_KILL_GRACE_SECONDS
         chunks: list[str] = []
+        control = None
         try:
             self._connection.send_bytes(encode({"type": "exec", "code": code}))
             while True:
@@ -72,12 +80,19 @@ class Sandbox:
                 message = decode(self._connection.recv_bytes())
                 if message["type"] == "stdout":
                     chunks.append(message["data"])
+                elif message["type"] == "control":
+                    control = _control_exception(message)
+                    break
                 else:
                     return ExecutionResult(
                         stdout=_join_output(chunks),
                         error=message["error"],
                         value=message["value"],
                     )
+        except KeyboardInterrupt:
+            # Ctrl+C reached us while we waited: stop the worker, then let it through.
+            self._kill_worker()
+            raise
         except (EOFError, OSError):
             self._restart()
             return ExecutionResult(
@@ -87,13 +102,19 @@ class Sandbox:
                     "of memory). The sandbox was restarted, so all variables were lost."
                 ),
             )
+        # Only reached when the model's code raised SystemExit or KeyboardInterrupt.
+        raise control
 
 
+
+    def _kill_worker(self) -> None:
+        """Kill the worker process and wait until it is gone."""
+        self._process.kill()
+        self._process.join()
 
     def _restart(self) -> None:
         """Kill the worker and start a fresh one (its variables are lost)."""
-        self._process.kill()
-        self._process.join()
+        self._kill_worker()
         self._connection.close()
         self.start()
 

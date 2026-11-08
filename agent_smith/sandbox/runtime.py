@@ -7,7 +7,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Optional
 from typing import Callable, Optional
-
+from agent_smith.sandbox.audit import enforcing
 from agent_smith.models import SandboxConfig
 from agent_smith.sandbox.errors import SandboxTimeout
 from agent_smith.sandbox.policy import make_safe_builtins, validate_ast
@@ -84,7 +84,7 @@ def execute(
         last = None
         if tree.body and isinstance(tree.body[-1], ast.Expr):
             last = ast.Expression(tree.body.pop().value)
-        with contextlib.redirect_stdout(stdout), _time_limit(timeout_seconds):
+        with contextlib.redirect_stdout(stdout), _time_limit(timeout_seconds), enforcing():
             exec(compile(tree, SANDBOX_FILENAME, "exec"), namespace)
             if last is not None:
                 value = eval(compile(last, SANDBOX_FILENAME, "eval"), namespace)
@@ -102,7 +102,9 @@ def execute(
 
 
 def _format_error(exc: Exception) -> str:
-    """One-line description of an error, with the line number in the model's code."""
+    """One-line description of an error, with the line number in the model's code."""    
+    if isinstance(exc, MemoryError):
+        return "MemoryError: the sandbox memory limit was exceeded"
     if isinstance(exc, SyntaxError):
         line = exc.lineno
     else:
