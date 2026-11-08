@@ -1,14 +1,19 @@
 """The sandbox controller: starts a worker process and sends it code to run."""
+import json
 import multiprocessing
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 import time
 
+from agent_smith.mcp_client.schema import ToolSpec
 from agent_smith.models import SandboxConfig
 from agent_smith.sandbox.protocol import decode, encode
+from agent_smith.sandbox.tools import resolve_names
 from agent_smith.sandbox.worker import worker_main
+
 HARD_KILL_GRACE_SECONDS = 2
 MAX_OUTPUT_CHARS = 10_000
+MAX_TOOL_OUTPUT_CHARS = 10_000
 
 @dataclass
 class ExecutionResult:
@@ -20,15 +25,22 @@ class ExecutionResult:
     final_answer: Optional[str] = None
 
 
-def _join_output(chunks: list[str]) -> str:
-    """Glue chunks together, cutting the text at MAX_OUTPUT_CHARS with a note."""
-    text = "".join(chunks)
-    if len(text) <= MAX_OUTPUT_CHARS:
+def truncate(text: str, limit: int) -> str:
+    """Keep the start and the end of a long text, and say what was dropped.
+
+    The end matters: an error message or a test summary is usually there.
+    """
+    if len(text) <= limit:
         return text
-    return (
-        text[:MAX_OUTPUT_CHARS]
-        + f"\n[output truncated: kept {MAX_OUTPUT_CHARS} of {len(text)} characters]"
-    )
+    head = limit * 2 // 3
+    tail = limit - head
+    note = f"\n[output truncated: kept {limit} of {len(text)} characters]\n"
+    return text[:head] + note + text[-tail:]
+
+
+def _join_output(chunks: list[str]) -> str:
+    """Glue the streamed chunks together, capped with a visible note."""
+    return truncate("".join(chunks), MAX_OUTPUT_CHARS)
 
 
 def _control_exception(message: dict) -> BaseException:
@@ -41,22 +53,60 @@ def _control_exception(message: dict) -> BaseException:
 class Sandbox:
     """Runs code in a separate worker process that keeps its variables."""
 
-    def __init__(self, config: SandboxConfig):
+    def __init__(self, config: SandboxConfig, bridge=None):
         self.config = config
+        self._bridge = bridge
+        self._tool_specs: Optional[List[ToolSpec]] = None
         self._process = None
         self._connection = None
 
+    @property
+    def tool_specs(self) -> List[ToolSpec]:
+        """What the connected server offers, as the worker sees it."""
+        return list(self._tool_specs or [])
+
     def start(self) -> None:
-        """Start the worker process."""
+        """Start the worker process, telling it about the MCP tools."""
+        if self._bridge is not None and self._tool_specs is None:
+            self._tool_specs = resolve_names(self._bridge.list_tools())
         context = multiprocessing.get_context("spawn")
         self._connection, worker_end = context.Pipe()
         self._process = context.Process(
             target=worker_main,
-            args=(worker_end, self.config.model_dump_json()),
+            args=(worker_end, self.config.model_dump_json(), self._mcp_json()),
             daemon=True,
         )
         self._process.start()
         worker_end.close()
+
+    def _mcp_json(self) -> str:
+        """The tool list the worker needs to build its stubs."""
+        if self._bridge is None:
+            return ""
+        return json.dumps(
+            {"connected": True, "tools": [spec.as_dict() for spec in self._tool_specs or []]}
+        )
+
+    def _serve_mcp(self, message: dict) -> float:
+        """Relay one request to the MCP server. Returns how long it took.
+
+        The worker is blocked waiting for this answer, and the time spent here
+        is given back to the execution deadline: tools are outside the
+        sandbox's time limit (the server is its own security domain).
+        """
+        started = time.monotonic()
+        try:
+            if self._bridge is None:
+                raise RuntimeError("no MCP server is connected to this sandbox")
+            reply = {"ok": True, "text": truncate(self._bridge.invoke(
+                message["method"], message["payload"]
+            ), MAX_TOOL_OUTPUT_CHARS)}
+        except Exception as exc:
+            # The message is shown to the model, so keep it one readable line.
+            reply = {"ok": False, "text": str(exc) or type(exc).__name__}
+        reply["type"] = "mcp_result"
+        self._connection.send_bytes(encode(reply))
+        return time.monotonic() - started
 
     def execute(self, code: str) -> ExecutionResult:
         """Run `code` in the worker and return what it produced."""
@@ -81,6 +131,8 @@ class Sandbox:
                 message = decode(self._connection.recv_bytes())
                 if message["type"] == "stdout":
                     chunks.append(message["data"])
+                elif message["type"] == "mcp":
+                    deadline += self._serve_mcp(message)
                 elif message["type"] == "control":
                     control = _control_exception(message)
                     break

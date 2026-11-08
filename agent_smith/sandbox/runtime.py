@@ -77,6 +77,22 @@ def _time_limit(seconds: Optional[float]):
         signal.signal(signal.SIGALRM, previous)
 
 
+@contextlib.contextmanager
+def timer_paused():
+    """Stop the execution clock inside this block.
+
+    MCP tools are a separate security domain and are not counted against the
+    sandbox timeout, so the alarm is cancelled and then restored with the time
+    that was left on it.
+    """
+    remaining = signal.setitimer(signal.ITIMER_REAL, 0)[0]
+    try:
+        yield
+    finally:
+        if remaining > 0:
+            signal.setitimer(signal.ITIMER_REAL, remaining)
+
+
 def execute(
     code: str,
     namespace: dict,
