@@ -71,10 +71,21 @@ def test_an_error_does_not_end_the_session():
     assert "still here" in done.stdout
 
 
-def test_mcp_flags_are_accepted_but_not_supported_yet():
-    done = run_cli("exit\n", "--mcp-stdio", "python mcp_tools_mbpp.py")
-    assert "not yet supported" in done.stderr
+def test_mcp_tools_are_callable_from_the_prompt():
+    done = run_cli(
+        'print(run_tests("def add(a, b): return a + b", ["assert add(1, 2) == 3"]))\nexit\n',
+        "--mcp-stdio",
+        f"{sys.executable} mcp_tools_mbpp.py",
+    )
+    assert '"success": true' in done.stdout
     assert done.returncode == 0
+
+
+def test_an_unreachable_mcp_server_is_one_line_on_stderr():
+    done = run_cli("exit\n", "--mcp-stdio", f"{sys.executable} no_such_server.py")
+    assert done.returncode == 2
+    assert "could not connect to the MCP server" in done.stderr
+    assert "Traceback" not in done.stderr
 
 
 def test_system_exit_in_code_sets_the_exit_code():
