@@ -64,5 +64,10 @@ def worker_main(connection, config_json: str) -> None:
             connection.send_bytes(encode(_control_message(exc)))
             continue
         connection.send_bytes(
-            encode({"type": "result", "error": result.error, "value": result.value})
+            encode({
+                "type": "result",
+                "error": result.error,
+                "value": result.value,
+                "final_answer": result.final_answer,
+            })
         )

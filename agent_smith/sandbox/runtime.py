@@ -9,7 +9,7 @@ from typing import Optional
 from typing import Callable, Optional
 from agent_smith.sandbox.audit import enforcing
 from agent_smith.models import SandboxConfig
-from agent_smith.sandbox.errors import SandboxTimeout
+from agent_smith.sandbox.errors import FinalAnswerSignal, SandboxTimeout
 from agent_smith.sandbox.policy import make_safe_builtins, validate_ast
 
 SANDBOX_FILENAME = "<sandbox>"
@@ -22,11 +22,26 @@ class ExecResult:
     stdout: str = ""
     error: Optional[str] = None
     value: Optional[str] = None
+    final_answer: Optional[str] = None
+
+
+def final_answer(answer: str):
+    """Record the model's answer and end the session.
+
+    Injected into the sandbox namespace, never offered as an MCP tool: the
+    sandbox itself must own the end of the session.
+    """
+    if not isinstance(answer, str):
+        raise TypeError(
+            "final_answer() expects the answer as a string, got "
+            f"{type(answer).__name__}"
+        )
+    raise FinalAnswerSignal(answer)
 
 
 def new_namespace(config: SandboxConfig) -> dict:
     """A fresh namespace whose builtins are the restricted ones."""
-    return {"__builtins__": make_safe_builtins(config)}
+    return {"__builtins__": make_safe_builtins(config), "final_answer": final_answer}
 
 
 class _StreamingBuffer(io.StringIO):
@@ -90,6 +105,8 @@ def execute(
                 value = eval(compile(last, SANDBOX_FILENAME, "eval"), namespace)
                 if value is not None:
                     result.value = repr(value)
+    except FinalAnswerSignal as submitted:
+        result.final_answer = submitted.answer
     except SandboxTimeout:
         result.error = (
             f"Timeout: execution took longer than {timeout_seconds} s. "

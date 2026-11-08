@@ -17,6 +17,7 @@ class ExecutionResult:
     stdout: str = ""
     error: Optional[str] = None
     value: Optional[str] = None
+    final_answer: Optional[str] = None
 
 
 def _join_output(chunks: list[str]) -> str:
@@ -88,6 +89,7 @@ class Sandbox:
                         stdout=_join_output(chunks),
                         error=message["error"],
                         value=message["value"],
+                        final_answer=message["final_answer"],
                     )
         except KeyboardInterrupt:
             # Ctrl+C reached us while we waited: stop the worker, then let it through.
