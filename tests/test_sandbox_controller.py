@@ -121,6 +121,17 @@ def test_keyboard_interrupt_in_code_reaches_the_caller(sandbox):
     assert sandbox.execute("1 + 1").value == "2"
 
 
+def test_final_answer_crosses_the_pipe(sandbox):
+    result = sandbox.execute('print("before")\nfinal_answer("the answer")\nprint("after")')
+    assert result.final_answer == "the answer"
+    assert result.stdout == "before\n"
+    assert result.error is None
+
+
+def test_ordinary_code_has_no_final_answer(sandbox):
+    assert sandbox.execute("1 + 1").final_answer is None
+
+
 def test_ctrl_c_while_waiting_kills_the_worker():
     with Sandbox(SandboxConfig(max_execution_time_seconds=30)) as running:
         process = running._process

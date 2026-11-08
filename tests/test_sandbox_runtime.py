@@ -73,3 +73,23 @@ def test_output_is_streamed_while_running(namespace):
     seen = []
     execute("print('a')\nprint('b')", namespace, on_output=seen.append)
     assert "".join(seen) == "a\nb\n"
+
+
+def test_final_answer_is_reported_as_data(namespace):
+    result = execute('print("before")\nfinal_answer("done")\nprint("after")', namespace)
+    assert result.final_answer == "done"
+    assert result.stdout == "before\n"
+    assert result.error is None
+
+
+def test_final_answer_is_not_swallowed_by_except_exception(namespace):
+    code = 'try:\n    final_answer("kept")\nexcept Exception:\n    print("caught")'
+    result = execute(code, namespace)
+    assert result.final_answer == "kept"
+    assert result.stdout == ""
+
+
+def test_final_answer_requires_a_string(namespace):
+    result = execute("final_answer(42)", namespace)
+    assert result.final_answer is None
+    assert "expects the answer as a string" in result.error
