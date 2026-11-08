@@ -1,0 +1,10 @@
+{
+  "max_iterations": 10,
+  "max_input_tokens": 5500,
+  "max_output_tokens": 1400,
+  "max_tokens_per_call": 700,
+  "deadline_seconds": 100.0,
+  "observation_max_chars": 1500,
+  "temperature": 0.0,
+  "stop": ["<end_code>", "Observation:"]
+}
