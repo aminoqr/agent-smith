@@ -19,6 +19,18 @@ def is_import_allowed(name: str, allowlist: List[str]) -> bool:
     return any(fnmatchcase(name, pattern) for pattern in allowlist)
 
 
+# Modules that Python's own C code imports behind the scenes on behalf of an
+# allowed module (datetime.strptime needs _strptime, datetime.strftime needs time).
+# Such an import arrives with fromlist == [] (an empty list); a `import x`
+# statement passes None and `from x import y` passes a tuple, so the model's own
+# `import time` is still refused.
+HIDDEN_IMPORTS = frozenset({"_strptime", "time"})
+
+
+def _is_hidden_import(name: str, fromlist) -> bool:
+    return name in HIDDEN_IMPORTS and isinstance(fromlist, list) and not fromlist
+
+
 def make_guarded_import(allowlist: List[str]):
     """Build a replacement for __import__ that enforces the allowlist."""
     real_import = builtins.__import__
@@ -26,7 +38,7 @@ def make_guarded_import(allowlist: List[str]):
     def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
         if level > 0:
             raise SandboxSecurityError("relative imports are not allowed in the sandbox")
-        if not is_import_allowed(name, allowlist):
+        if not _is_hidden_import(name, fromlist) and not is_import_allowed(name, allowlist):
             raise SandboxSecurityError(f"import of '{name}' is not allowed")
         module = real_import(name, globals, locals, fromlist, level)
         for item in fromlist or ():
@@ -57,6 +69,8 @@ def make_safe_builtins(config: SandboxConfig) -> dict:
         safe[name] = _disabled(name)
     safe["__import__"] = make_guarded_import(config.authorized_imports)
     safe["open"] = make_guarded_open(config.allowed_directories)
+    for name in ATTRIBUTE_BUILTINS:
+        safe[name] = _guard_attribute_builtin(getattr(builtins, name), name)
 
     return safe
 
@@ -89,8 +103,24 @@ def make_guarded_open(allowed_directories: List[str]):
 FORBIDDEN_NAMES = frozenset({
     "__subclasses__", "__bases__", "__base__", "__mro__", "__class__",
     "__globals__", "__builtins__", "__code__", "__closure__",
-    "f_globals", "f_builtins", "f_back", "tb_frame", "gi_frame",
+    "f_globals", "f_builtins", "f_back", "f_locals", "tb_frame", "gi_frame",
+    "cr_frame", "ag_frame", "__self__", "__import__", "__getattribute__",
+    "__loader__", "__spec__",
 })
+
+# getattr("__cl" + "ass__") builds the name at run time, so the AST check cannot
+# see it. These wrappers check the final name instead.
+ATTRIBUTE_BUILTINS = ("getattr", "hasattr", "setattr", "delattr")
+
+
+def _guard_attribute_builtin(real_function, name: str):
+    """Wrap getattr/hasattr/setattr/delattr so they refuse forbidden names."""
+    def guarded(obj, attribute, *args):
+        if isinstance(attribute, str) and attribute in FORBIDDEN_NAMES:
+            raise SandboxSecurityError(f"access to '{attribute}' is not allowed")
+        return real_function(obj, attribute, *args)
+    guarded.__name__ = name
+    return guarded
 
 
 def validate_ast(code: str) -> None:
