@@ -5,6 +5,7 @@ import sys
 from typing import List, Optional
 
 from agent_smith.config import ConfigError, load_json_model
+from agent_smith.mcp_client.bridge import MCPBridge, MCPError
 from agent_smith.models import SandboxConfig
 from agent_smith.sandbox.controller import ExecutionResult, Sandbox
 
@@ -24,8 +25,8 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
         help="JSON file with the sandbox configuration (defaults are used without it)",
     )
     servers = parser.add_mutually_exclusive_group()
-    servers.add_argument("--mcp-stdio", metavar="CMD", help="MCP server to launch (M5.5)")
-    servers.add_argument("--mcp-server", metavar="URL", help="MCP server to connect to (M5.5)")
+    servers.add_argument("--mcp-stdio", metavar="CMD", help="MCP server to launch and talk to over stdio")
+    servers.add_argument("--mcp-server", metavar="URL", help="URL of a running MCP server (streamable HTTP)")
     return parser.parse_args(argv)
 
 
@@ -82,19 +83,28 @@ def _read_entry(interactive: bool) -> Optional[str]:
             return line
 
 
+def _connect_mcp(args: argparse.Namespace) -> Optional[MCPBridge]:
+    """Open the MCP connection the flags asked for, if any."""
+    if not (args.mcp_stdio or args.mcp_server):
+        return None
+    bridge = MCPBridge()
+    if args.mcp_stdio:
+        return bridge.connect_stdio(args.mcp_stdio)
+    return bridge.connect_http(args.mcp_server)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Run the prompt until `exit`, end of input, or a final answer."""
     args = _parse_args(argv)
-    if args.mcp_stdio or args.mcp_server:
-        print("MCP servers are not yet supported (coming in milestone 5.5)", file=sys.stderr)
     try:
         config = _load_config(args.config)
-    except ConfigError as error:
+        bridge = _connect_mcp(args)
+    except (ConfigError, MCPError) as error:
         print(error, file=sys.stderr)
         return 2
     interactive = sys.stdin.isatty()
     try:
-        with Sandbox(config) as sandbox:
+        with Sandbox(config, bridge) as sandbox:
             while True:
                 entry = _read_entry(interactive)
                 if entry is None or entry.strip() in ("exit", "quit"):
@@ -110,6 +120,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     except KeyboardInterrupt:
         print("Interrupted", file=sys.stderr)
         return 130
+    finally:
+        if bridge is not None:
+            bridge.close()
 
 
 if __name__ == "__main__":
