@@ -4,6 +4,14 @@
 class SandboxSecurityError(Exception):
     """Code tried to do something the sandbox policy forbids."""
 
+class ToolError(Exception):
+    """An MCP tool refused the call or could not be reached.
+
+    An ordinary Exception: a tool failing is a normal event the model's code
+    may catch and work around.
+    """
+
+
 class FinalAnswerSignal(BaseException):
     """Raised by final_answer() to end the session with an answer.
 
