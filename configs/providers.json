@@ -1,0 +1,76 @@
+{
+  "providers": [
+    {
+      "name": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "key_env_vars": [
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY_2",
+        "OPENROUTER_API_KEY_3"
+      ],
+      "models": [
+        "qwen/qwen3-coder:free",
+        "deepseek/deepseek-chat-v3.1:free",
+        "meta-llama/llama-3.3-70b-instruct:free"
+      ]
+    },
+    {
+      "name": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "key_env_vars": [
+        "GROQ_API_KEY",
+        "GROQ_API_KEY_2",
+        "GROQ_API_KEY_3"
+      ],
+      "models": [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "qwen/qwen3-32b"
+      ]
+    },
+    {
+      "name": "cerebras",
+      "base_url": "https://api.cerebras.ai/v1",
+      "key_env_vars": [
+        "CEREBRAS_API_KEY",
+        "CEREBRAS_API_KEY_2"
+      ],
+      "models": [
+        "qwen-3-coder-480b",
+        "llama-3.3-70b"
+      ]
+    },
+    {
+      "name": "mistral",
+      "base_url": "https://api.mistral.ai/v1",
+      "key_env_vars": [
+        "MISTRAL_API_KEY",
+        "MISTRAL_API_KEY_2"
+      ],
+      "models": [
+        "mistral-small-latest",
+        "codestral-latest"
+      ]
+    },
+    {
+      "name": "google-ai-studio",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "key_env_vars": [
+        "GEMINI_API_KEY",
+        "GEMINI_API_KEY_2"
+      ],
+      "models": [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite"
+      ]
+    },
+    {
+      "name": "local",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "key_env_vars": [
+        "LOCAL_API_KEY"
+      ],
+      "models": []
+    }
+  ]
+}
