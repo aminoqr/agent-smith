@@ -518,3 +518,51 @@ def _provider(key_env_vars):
     from agent_smith.llm import ProviderConfig
 
     return ProviderConfig(name="p", base_url="https://p.test/v1", key_env_vars=key_env_vars)
+
+
+# --- the ping script, which is the M6 "done when" check --------------------
+
+
+def _ping_script():
+    """Import scripts/llm_ping.py by path: it is a script, not a package module."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("llm_ping", "scripts/llm_ping.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _lonely_providers_file(tmp_path):
+    """A providers file whose keys are guaranteed unset, so no real call happens."""
+    path = tmp_path / "providers.json"
+    path.write_text(json.dumps({"providers": [
+        {"name": "nowhere", "base_url": "https://nowhere.test/v1",
+         "key_env_vars": ["AGENT_SMITH_TEST_KEY_UNSET"], "models": ["m"]},
+    ]}))
+    return str(path)
+
+
+def test_the_ping_script_names_the_providers_it_knows(tmp_path):
+    script = _ping_script()
+    code = script.main(["--provider", "typo", "--providers", _lonely_providers_file(tmp_path)])
+
+    assert code == 2
+
+
+def test_the_ping_script_skips_providers_without_keys(tmp_path, capsys):
+    script = _ping_script()
+    code = script.main(["--all", "--providers", _lonely_providers_file(tmp_path)])
+    printed = capsys.readouterr()
+
+    assert code == 1
+    assert "skipped: no key" in printed.out
+    assert "at least two" in printed.err
+
+
+def test_the_ping_script_reports_a_missing_key_for_one_provider(tmp_path, capsys):
+    script = _ping_script()
+    code = script.main(["--provider", "nowhere", "--providers", _lonely_providers_file(tmp_path)])
+
+    assert code == 2
+    assert "AGENT_SMITH_TEST_KEY_UNSET" in capsys.readouterr().err
