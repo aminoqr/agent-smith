@@ -6,6 +6,9 @@ dependencies = [
     "pydantic>=2.14.2",
 ]
 
+[project.scripts]
+sandbox = "agent_smith.sandbox.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
