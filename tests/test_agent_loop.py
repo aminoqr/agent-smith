@@ -380,8 +380,8 @@ def test_the_task_message_shows_the_signature_and_the_tests():
     task = MBPPTaskInput.model_validate_json(SAMPLE.read_text())
     message = build_task_message(task)
 
-    assert "def remove_Occ(s, ch):" in message
-    assert 'assert remove_Occ("hello","l") == "heo"' in message
+    assert "def remove_Occ(s,ch):" in message
+    assert 'assert remove_Occ("PHP","P") == "H"' in message
     assert "test_list" in message
 
 
@@ -391,7 +391,7 @@ def test_the_prelude_defines_the_tests_in_the_sandbox():
 
     namespace = {}
     exec(prelude, namespace)  # noqa: S102 - our own generated code, in a test
-    assert len(namespace["test_list"]) == 3
+    assert len(namespace["test_list"]) == 2
 
 
 def test_the_committed_agent_config_stays_under_the_mbpp_limits():
@@ -469,3 +469,16 @@ def test_a_scripted_model_solves_a_task_through_the_real_sandbox(tmp_path):
     exec(solution.solution, namespace)  # noqa: S102
     for assertion in task.test_list:
         exec(assertion, namespace)  # noqa: S102
+
+
+def test_a_model_stuck_on_one_answer_is_stopped_early(tmp_path):
+    """Repeating the same code cannot progress, so it should not cost the budget."""
+    llm = FakeLLM([reply("print(1)")], repeat_last=True)
+    sandbox = StubSandbox(ExecutionResult(stdout="1"))
+    config = AgentConfig(max_iterations=10, max_repeated_code=2)
+    solution, _writer = run_agent(llm, sandbox, config, tmp_path=tmp_path)
+
+    assert sandbox.executed == ["print(1)"]  # ran once, never again
+    assert solution.iterations == 3  # the first run plus two repeats
+    assert "same code 2 times in a row" in solution.error
+    assert solution.success is False
