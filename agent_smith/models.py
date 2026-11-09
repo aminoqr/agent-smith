@@ -51,6 +51,7 @@ class AgentConfig(BaseModel):
     max_tokens_per_call: int = Field(700, gt=0, description="Cap on one answer, so one step cannot eat the budget")
     deadline_seconds: float = Field(100.0, gt=0, description="Wall-clock budget, below the grader's kill")
     observation_max_chars: int = Field(1_500, gt=0, description="Truncation size for what we feed back")
+    max_repeated_code: int = Field(3, gt=0, description="Consecutive identical code blocks before giving up")
     temperature: float = Field(0.0, ge=0.0, le=2.0)
     stop: List[str] = Field(
         default_factory=lambda: ["<end_code>", "Observation:"],

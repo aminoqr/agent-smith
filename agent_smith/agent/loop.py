@@ -26,6 +26,11 @@ EMPTY_ANSWER_PLACEHOLDER = "(your previous answer was empty)"
 
 NO_ANSWER_SUFFIX = "final_answer() was never called, so there is no solution"
 
+STUCK_ERROR = (
+    "the model sent the same code {count} times in a row, so the run was stopped "
+    "before the rest of the budget was spent on it"
+)
+
 
 class Agent:
     """One task, one sandbox, one conversation."""
@@ -71,6 +76,7 @@ class Agent:
         solution = ""
         error: Optional[str] = None
         last_code: Optional[str] = None
+        repeats = 0
 
         def snapshot() -> SolutionOutput:
             return build_solution(
@@ -118,9 +124,11 @@ class Agent:
                     reply = found.feedback()
                     executed, sandbox_output = "", ""
                 elif repeated:
+                    repeats += 1
                     reply = REPEATED_CODE_FEEDBACK
                     executed, sandbox_output = "", ""
                 else:
+                    repeats = 0
                     outcome = self.sandbox.execute(code)
                     reply = build_observation(outcome, found.notes, self.config.observation_max_chars)
                     executed, sandbox_output = code, reply
@@ -140,6 +148,11 @@ class Agent:
                 self._save(snapshot())
 
                 if success:
+                    break
+                if repeats >= self.config.max_repeated_code:
+                    # Telling it again has not worked; more calls would only
+                    # spend the budget that a later task could use.
+                    error = STUCK_ERROR.format(count=repeats)
                     break
 
             if not success:
